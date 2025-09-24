@@ -1,0 +1,25 @@
+select 
+nu_ano_censo,
+count(1) total,
+sum(case when tp_dependencia = 2 and and cd_ano_serie < 5 or cd_etapa_fase = 2 then 1 else 0 end) nr_ai,
+sum(case when tp_dependencia = 2 and and cd_ano_serie > 4 and  cd_etapa_fase > 2  then 1 else 0 end) nr_af,
+sum(case when tp_dependencia = 2 and  cd_etapa_fase = 2 then 1 else 0 end) nr_1,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 1 then 1 else 0 end) nr_2,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 2 then 1 else 0 end) nr_3,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 3 then 1 else 0 end) nr_4,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 4 then 1 else 0 end) nr_5,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 5 then 1 else 0 end) nr_6,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 6 then 1 else 0 end) nr_7,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 7 then 1 else 0 end) nr_8,
+sum(case when tp_dependencia = 2 and  cd_ano_serie = 8 then 1 else 0 end) nr_9,
+sum(case when cd_ano_serie = in (9,10,11)  then 1 else 0 end) nr_medio,
+sum(case when cd_ano_serie = 9 then 1 else 0 end) nr_10,
+sum(case when cd_ano_serie = 10 then 1 else 0 end) nr_11,
+sum(case when cd_ano_serie = 11 then 1 else 0 end) nr_12
+from censo_esc_d.tb_matricula tm 
+join dw_censo.tb_dm_etapa tde on cd_etapa_ensino = tm.tp_etapa_ensino 
+where tp_etapa_ensino is not null
+and tm.tp_dependencia in (2,3)
+and (cd_ano_serie between 1 and 11 or cd_etapa_fase = 2)
+and tm.co_municipio =2304400
+group by 1

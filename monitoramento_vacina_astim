@@ -1,0 +1,225 @@
+#QUANTITATIVO POR ESCOLA
+select 
+tutPai.nm_sigla id_crede_sefor, 
+tut.nr_codigo_unid_trab id_escola_inep, 
+tut.nm_unidade_trabalho nm_escola,
+	            sum(case when tca.cd_etapa_vacina =1  then 1 else 0 end ) vacina_uma_dose ,
+	            sum(case when tca.cd_etapa_vacina =2  then 1 else 0 end ) vacina_duas_doses ,
+	            sum(case when tca.cd_etapa_vacina =3  then 1 else 0 end ) vacina_unica_dose ,
+	            sum(case when tca.cd_etapa_vacina =4 then 1 else 0 end ) vacina_nao ,
+	            sum(case when tca.cd_etapa_vacina is null then 1 else 0 end ) nao_informado
+          from aluno_online.tb_condicao_acesso tca
+	      inner join academico.tb_aluno al on al.ci_aluno  = tca.cd_aluno
+    	  inner join academico.tb_turma tt on tt.ci_turma  = tca.cd_turma and tca.nr_anoletivo=tt.nr_anoletivo 
+    	  inner join academico.tb_ultimaenturmacao tu on tt.ci_turma=tu.cd_turma and al.ci_aluno=tu.cd_aluno and tca.nr_anoletivo=tu.nr_anoletivo 
+	      inner join util.tb_unidade_trabalho tut on tut.ci_unidade_trabalho  = tt.cd_unidade_trabalho
+	      inner join util.tb_unidade_trabalho tutPai on tutPai.ci_unidade_trabalho  = tut.cd_unidade_trabalho_pai and tutPai.cd_tpunidade_trabalho  = 2
+    	  left join aluno_online.tb_etapa_vacina tev on tev.ci_etapa_vacina  = tca.cd_etapa_vacina
+      where tca.nr_anoletivo = 2022 
+      		and tut.ci_unidade_trabalho=71 
+group by 1,2,3 order by 1,3;
+
+
+select ds_etapa_vacina, count(distinct cd_aluno) from (
+with turma as (
+select
+nr_anoletivo,
+ci_turma,
+cd_nivel,
+cd_etapa,
+ds_ofertaitem,
+ds_turma,
+fl_tipo_seriacao,
+case when cd_turno in (8,9) then 'Integral' else ds_turno end ds_turno,
+cd_unidade_trabalho,
+cd_prefeitura
+from academico.tb_turma tt 
+join academico.tb_turno tr on tr.ci_turno = tt.cd_turno 
+where
+tt.nr_anoletivo = 2022 
+	and tt.cd_prefeitura = 0
+	and tt.cd_nivel in (26,27,28)
+and exists (select 1 from rede_fisica.tb_unidade_trabalho tut where tut.ci_unidade_trabalho = tt.cd_unidade_trabalho 
+						and tut.cd_dependencia_administrativa = 2)
+),
+ult_ent as (
+  select
+  cd_aluno,
+  cd_turma
+  from academico.tb_ultimaenturmacao tu 
+  where tu.nr_anoletivo = 2022 
+  and tu.fl_tipo_atividade <> 'AC'
+  and exists (select 1 from turma t where t.ci_turma = tu.cd_turma)
+  ),   
+vacina as (
+ select 
+  tca.cd_aluno,
+  max( case when tca.cd_etapa_vacina = 4 then 0 else tca.cd_etapa_vacina end ) cd_etapa_vacina
+  from aluno_online.tb_condicao_acesso tca 
+		  inner join academico.tb_aluno al on al.ci_aluno  = tca.cd_aluno
+    	  inner join academico.tb_turma tt on tt.ci_turma  = tca.cd_turma --and tca.nr_anoletivo=tt.nr_anoletivo 
+    	  inner join academico.tb_ultimaenturmacao tu on tt.ci_turma=tu.cd_turma and al.ci_aluno=tu.cd_aluno and tca.nr_anoletivo=tu.nr_anoletivo 
+	      inner join util.tb_unidade_trabalho tut on tut.ci_unidade_trabalho  = tt.cd_unidade_trabalho
+	      inner join util.tb_unidade_trabalho tutPai on tutPai.ci_unidade_trabalho  = tut.cd_unidade_trabalho_pai and tutPai.cd_tpunidade_trabalho  = 2
+    	  left join aluno_online.tb_etapa_vacina tev on tev.ci_etapa_vacina  = tca.cd_etapa_vacina
+  where tut.ci_unidade_trabalho=71 --id da escola  
+  		and tca.nr_anoletivo = 2022 
+   -- and exists (select 1 from ult_ent t where t.cd_aluno = tca.cd_aluno)
+group by 1
+  )
+  
+select distinct tut.cd_unidade_trabalho_pai id_crede_sefor, tutpai.nm_sigla nm_crede_sefor, 
+tl.ci_municipio_censo id_municipio, tl.nm_municipio nm_municipio, 
+tut.nr_codigo_unid_trab id_escola, tut.nm_unidade_trabalho nm_escola, tc.nm_categoria,
+cd_turma, cd_etapa, ds_ofertaitem, ds_turma, ds_turno, tue.cd_aluno, nm_aluno, fl_sexo, 
+case when cd_raca is null then 'Não Declarada' else ds_raca end ds_raca, 
+to_char(dt_nascimento, 'DD/MM/YYYY') dt_nascimento,
+extract (year from age('2022-04-27', dt_nascimento))::int nr_idade, 
+case when cd_etapa_vacina is null then 9 else cd_etapa_vacina end cd_etapa_vacina,
+case 
+	when cd_etapa_vacina = 0 then 'Não Vacinado(a)'
+	when cd_etapa_vacina = 1 then '1ª Dose'
+	when cd_etapa_vacina = 2 then '2ª Dose'
+	when cd_etapa_vacina = 3 then 'Dose Única'	
+	when cd_etapa_vacina is null then 'Sem Informações'
+end ds_etapa_vacina,
+to_char(current_date,'DD/MM/YYYY') dt_relatorio 
+from ult_ent tue
+join turma tt on tt.ci_turma = tue.cd_turma
+left join vacina v on v.cd_aluno = tue.cd_aluno
+join academico.tb_aluno ta on tue.cd_aluno = ci_aluno
+left join academico.tb_raca tr2 on cd_raca = ci_raca
+	join rede_fisica.tb_unidade_trabalho tut on tut.ci_unidade_trabalho = tt.cd_unidade_trabalho 
+	join rede_fisica.tb_unidade_trabalho tutpai on tut.cd_unidade_trabalho_pai = tutpai.ci_unidade_trabalho 
+	join rede_fisica.tb_local_unid_trab tlu on tlu.cd_unidade_trabalho  = tut.ci_unidade_trabalho 
+	join rede_fisica.tb_local_funcionamento tlf on tlu.cd_local_funcionamento  = tlf.ci_local_funcionamento 
+	join util.tb_municipio_censo tl on tlf.cd_municipio_censo = tl.ci_municipio_censo
+	join rede_fisica.tb_categoria tc on tc.ci_categoria = tut.cd_categoria
+where tt.nr_anoletivo = 2022 
+		and tut.cd_dependencia_administrativa = 2 
+		and tt.cd_prefeitura = 0
+	and tt.fl_tipo_seriacao <> 'AC' and tut.cd_situacao_funcionamento = 1 and tlu.fl_sede = true
+and tut.cd_tipo_unid_trab = 401
+	and tut.ci_unidade_trabalho=71 --id da escola
+ ) res group by 1
+
+
+ #TOTAIS GERAIS
+ select ds_etapa_vacina, count(distinct cd_aluno) from (
+with turma as (
+select
+nr_anoletivo,
+ci_turma,
+cd_nivel,
+cd_etapa,
+ds_ofertaitem,
+ds_turma,
+fl_tipo_seriacao,
+case when cd_turno in (8,9) then 'Integral' else ds_turno end ds_turno,
+cd_unidade_trabalho,
+cd_prefeitura
+from academico.tb_turma tt 
+join academico.tb_turno tr on tr.ci_turno = tt.cd_turno 
+where
+tt.nr_anoletivo = 2022 
+	and tt.cd_prefeitura = 0
+	and tt.cd_nivel in (26,27,28)
+and exists (select 1 from rede_fisica.tb_unidade_trabalho tut where tut.ci_unidade_trabalho = tt.cd_unidade_trabalho 
+						and tut.cd_dependencia_administrativa = 2)
+),
+ult_ent as (
+  select
+  cd_aluno,
+  cd_turma
+  from academico.tb_ultimaenturmacao tu 
+  where tu.nr_anoletivo = 2022 
+  and tu.fl_tipo_atividade <> 'AC'
+  and exists (select 1 from turma t where t.ci_turma = tu.cd_turma)
+  ),   
+vacina as (
+ select 
+  tca.cd_aluno,
+  max( case when tca.cd_etapa_vacina = 4 then 0 else tca.cd_etapa_vacina end ) cd_etapa_vacina
+  from aluno_online.tb_condicao_acesso tca 
+		  inner join academico.tb_aluno al on al.ci_aluno  = tca.cd_aluno
+    	  inner join academico.tb_turma tt on tt.ci_turma  = tca.cd_turma --and tca.nr_anoletivo=tt.nr_anoletivo 
+    	  inner join academico.tb_ultimaenturmacao tu on tt.ci_turma=tu.cd_turma and al.ci_aluno=tu.cd_aluno and tca.nr_anoletivo=tu.nr_anoletivo 
+	      inner join util.tb_unidade_trabalho tut on tut.ci_unidade_trabalho  = tt.cd_unidade_trabalho
+	      inner join util.tb_unidade_trabalho tutPai on tutPai.ci_unidade_trabalho  = tut.cd_unidade_trabalho_pai and tutPai.cd_tpunidade_trabalho  = 2
+    	  left join aluno_online.tb_etapa_vacina tev on tev.ci_etapa_vacina  = tca.cd_etapa_vacina
+  where tut.ci_unidade_trabalho=71 --id da escola  
+  		and tca.nr_anoletivo = 2022 
+   -- and exists (select 1 from ult_ent t where t.cd_aluno = tca.cd_aluno)
+group by 1
+  )
+  
+select distinct tut.cd_unidade_trabalho_pai id_crede_sefor, tutpai.nm_sigla nm_crede_sefor, 
+tl.ci_municipio_censo id_municipio, tl.nm_municipio nm_municipio, 
+tut.nr_codigo_unid_trab id_escola, tut.nm_unidade_trabalho nm_escola, tc.nm_categoria,
+cd_turma, cd_etapa, ds_ofertaitem, ds_turma, ds_turno, tue.cd_aluno, nm_aluno, fl_sexo, 
+case when cd_raca is null then 'Não Declarada' else ds_raca end ds_raca, 
+to_char(dt_nascimento, 'DD/MM/YYYY') dt_nascimento,
+extract (year from age('2022-04-27', dt_nascimento))::int nr_idade, 
+case when cd_etapa_vacina is null then 9 else cd_etapa_vacina end cd_etapa_vacina,
+case 
+	when cd_etapa_vacina = 0 then 'Não Vacinado(a)'
+	when cd_etapa_vacina = 1 then '1ª Dose'
+	when cd_etapa_vacina = 2 then '2ª Dose'
+	when cd_etapa_vacina = 3 then 'Dose Única'	
+	when cd_etapa_vacina is null then 'Sem Informações'
+end ds_etapa_vacina,
+to_char(current_date,'DD/MM/YYYY') dt_relatorio 
+from ult_ent tue
+join turma tt on tt.ci_turma = tue.cd_turma
+left join vacina v on v.cd_aluno = tue.cd_aluno
+join academico.tb_aluno ta on tue.cd_aluno = ci_aluno
+left join academico.tb_raca tr2 on cd_raca = ci_raca
+	join rede_fisica.tb_unidade_trabalho tut on tut.ci_unidade_trabalho = tt.cd_unidade_trabalho 
+	join rede_fisica.tb_unidade_trabalho tutpai on tut.cd_unidade_trabalho_pai = tutpai.ci_unidade_trabalho 
+	join rede_fisica.tb_local_unid_trab tlu on tlu.cd_unidade_trabalho  = tut.ci_unidade_trabalho 
+	join rede_fisica.tb_local_funcionamento tlf on tlu.cd_local_funcionamento  = tlf.ci_local_funcionamento 
+	join util.tb_municipio_censo tl on tlf.cd_municipio_censo = tl.ci_municipio_censo
+	join rede_fisica.tb_categoria tc on tc.ci_categoria = tut.cd_categoria
+where tt.nr_anoletivo = 2022 
+		and tut.cd_dependencia_administrativa = 2 
+		and tt.cd_prefeitura = 0
+	and tt.fl_tipo_seriacao <> 'AC' and tut.cd_situacao_funcionamento = 1 and tlu.fl_sede = true
+and tut.cd_tipo_unid_trab = 401
+	and tut.ci_unidade_trabalho=71 --id da escola
+ ) res group by 1
+
+ #
+ select tutPai.nm_sigla, tut.nr_codigo_unid_trab, tut.nm_unidade_trabalho ,
+	            sum(case when tca.cd_etapa_vacina =1  then 1 else 0 end ) vacina_uma_dose ,
+	            sum(case when tca.cd_etapa_vacina =2  then 1 else 0 end ) vacina_duas_doses ,
+	            sum(case when tca.cd_etapa_vacina =3  then 1 else 0 end ) vacina_unica_dose ,
+	            sum(case when tca.cd_etapa_vacina =4 then 1 else 0 end ) vacina_nao ,
+	            sum(case when tca.cd_etapa_vacina is null then 1 else 0 end ) nao_informado
+from aluno_online.tb_condicao_acesso tca
+	      inner join academico.tb_aluno al on al.ci_aluno  = tca.cd_aluno
+    	  inner join academico.tb_turma tt on tt.ci_turma  = tca.cd_turma and tca.nr_anoletivo=tt.nr_anoletivo 
+    	  inner join academico.tb_ultimaenturmacao tu on tt.ci_turma=tu.cd_turma and al.ci_aluno=tu.cd_aluno and tca.nr_anoletivo=tu.nr_anoletivo 
+	      inner join util.tb_unidade_trabalho tut on tut.ci_unidade_trabalho  = tt.cd_unidade_trabalho
+	      inner join util.tb_unidade_trabalho tutPai on tutPai.ci_unidade_trabalho  = tut.cd_unidade_trabalho_pai and tutPai.cd_tpunidade_trabalho  = 2
+    	  left join aluno_online.tb_etapa_vacina tev on tev.ci_etapa_vacina  = tca.cd_etapa_vacina
+      where tca.nr_anoletivo = 2022 
+      		and tut.ci_unidade_trabalho=71 
+group by 1,2,3 order by 1,3;
+
+# ´por escola
+select tutPai.nm_sigla, tut.nr_codigo_unid_trab, tut.nm_unidade_trabalho ,
+	            sum(case when tca.cd_etapa_vacina =1  then 1 else 0 end ) vacina_uma_dose ,
+	            sum(case when tca.cd_etapa_vacina =2  then 1 else 0 end ) vacina_duas_doses ,
+	            sum(case when tca.cd_etapa_vacina =3  then 1 else 0 end ) vacina_unica_dose ,
+	            sum(case when tca.cd_etapa_vacina =4 then 1 else 0 end ) vacina_nao ,
+	            sum(case when tca.cd_etapa_vacina is null then 1 else 0 end ) nao_informado
+from aluno_online.tb_condicao_acesso tca
+	      inner join academico.tb_aluno al on al.ci_aluno  = tca.cd_aluno
+    	  inner join academico.tb_turma tt on tt.ci_turma  = tca.cd_turma and tca.nr_anoletivo=tt.nr_anoletivo 
+    	  inner join academico.tb_ultimaenturmacao tu on tt.ci_turma=tu.cd_turma and al.ci_aluno=tu.cd_aluno and tca.nr_anoletivo=tu.nr_anoletivo 
+	      inner join util.tb_unidade_trabalho tut on tut.ci_unidade_trabalho  = tt.cd_unidade_trabalho
+	      inner join util.tb_unidade_trabalho tutPai on tutPai.ci_unidade_trabalho  = tut.cd_unidade_trabalho_pai and tutPai.cd_tpunidade_trabalho  = 2
+    	  left join aluno_online.tb_etapa_vacina tev on tev.ci_etapa_vacina  = tca.cd_etapa_vacina
+      where tca.nr_anoletivo = 2022 
+      		and tut.ci_unidade_trabalho=71 
+group by 1,2,3 order by 1,3;

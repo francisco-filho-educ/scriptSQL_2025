@@ -1,0 +1,9 @@
+Em síntese, se faz necessário alterar/adicionar:
+
+ - as informações dos alunos da rede regular de ensino;
+
+ - Id do aluno: mudar de SIGE para código INEP;
+
+- Adicionar coluna de ano para a base de dados dos endereço dos alunos;
+ 
+- Adicionar o ano de 2017 para a base  do ENEM.
