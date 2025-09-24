@@ -1,0 +1,82 @@
+with escolas_aee as (
+select
+tt.nr_anoletivo,
+cd_unidade_trabalho,
+cd_aluno,
+ds_etapa,
+ds_turma,
+ds_turno
+from academico.tb_turma tt 
+join rede_fisica.tb_ambiente ta on ta.ci_ambiente = tt.cd_ambiente
+join academico.tb_ultimaenturmacao tu on tu.cd_turma = ci_turma 
+join academico.tb_etapa et on et.ci_etapa = tt.cd_etapa
+join academico.tb_turno on ci_turno = tt.cd_turno
+where tt.cd_prefeitura = 0
+and tt.nr_anoletivo = 2025
+and cd_nivel in (26,27,28)
+--and ta.cd_tipo_ambiente = 16 -- sala aee
+--and tt.cd_nivel = 29 -- aee
+--and tt.cd_nivel = 32 -- nape
+--and tt.cd_nivel = 33 --  creaece
+and exists (select 1 from academico.tb_aluno_deficiencia tad where tad.cd_aluno =  tu.cd_aluno)
+group by 1,2,3,4,5,6
+)
+,aluno_deficiencia_i as (
+select 
+cd_aluno,
+case when cd_deficiencia between 9 and 12 or cd_deficiencia = 24 then 'Autismo' else nm_deficiencia end nm_deficiencia 
+from academico.tb_aluno_deficiencia tad 
+join academico.tb_deficiencia td on td.ci_deficiencia = tad.cd_deficiencia 
+join escolas_aee using(cd_aluno)
+group by 1,2
+)
+,aluno_deficiencia as (
+select 
+	cd_aluno,
+	true fl_deficiencia,
+	string_agg(
+		nm_deficiencia, ', ' ) nm_deficiencia
+from aluno_deficiencia_i
+group by 1,2
+)
+,alunos as (
+    select 
+    ci_aluno cd_aluno,
+    nm_aluno,
+    to_char(dt_nascimento,'dd/mm/yyyy') dt_nascimento,
+    nm_mae filiacao_1
+    from academico.tb_aluno ta 
+    where exists (select 1 from escolas_aee  where ci_aluno = cd_aluno)
+  )
+
+SELECT 
+2025 nr_anoletivo,
+crede.ci_unidade_trabalho id_crede_sefor, 
+upper(crede.nm_sigla) nm_crede_sefor, 
+cd_municipio_censo,
+upper(nm_municipio) AS nm_municipio,
+tut.nr_codigo_unid_trab id_escola_inep, 
+upper(tut.nm_unidade_trabalho) nm_escola,
+upper(tlz.nm_localizacao_zona) AS ds_localizacao,
+case when tut.cd_categoria is null then 'Não se aplica'
+           when  tut.cd_tipo_unid_trab = 402 then 'CCI' 
+	       when  tut.ci_unidade_trabalho = 47258 then 'CREAECE' else upper(tc.nm_categoria) end AS ds_categoria,
+ds_etapa,
+ds_turma,
+ds_turno,
+a.*,
+nm_deficiencia
+FROM rede_fisica.tb_unidade_trabalho tut 
+JOIN rede_fisica.tb_unidade_trabalho crede ON crede.ci_unidade_trabalho = tut.cd_unidade_trabalho_pai
+JOIN rede_fisica.tb_local_unid_trab tlut ON tlut.cd_unidade_trabalho = tut.ci_unidade_trabalho
+JOIN rede_fisica.tb_local_funcionamento tlf ON tlf.ci_local_funcionamento = tlut.cd_local_funcionamento
+left JOIN rede_fisica.tb_categoria tc ON tc.ci_categoria = tut.cd_categoria
+JOIN rede_fisica.tb_localizacao_zona tlz ON tlz.ci_localizacao_zona = tlf.cd_localizacao_zona
+JOIN util.tb_municipio_censo tmc ON tmc.ci_municipio_censo = tlf.cd_municipio_censo
+join escolas_aee ea on ea.cd_unidade_trabalho = tut.ci_unidade_trabalho 
+join alunos a using(cd_aluno)
+join aluno_deficiencia ae using(cd_aluno)
+WHERE tut.cd_dependencia_administrativa = 2
+--AND tut.cd_situacao_funcionamento = 1
+AND tlut.fl_sede = TRUE 
+--group by 1,2,3,4,5,6,7,8,9

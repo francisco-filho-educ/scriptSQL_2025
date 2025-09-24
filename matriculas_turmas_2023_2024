@@ -1,0 +1,42 @@
+with escolas as (
+select 
+nr_ano_censo,
+tde.id_crede_sefor,
+nm_crede_sefor,
+tde.nm_municipio,
+tde.ds_categoria,
+tde.id_escola_inep,
+nm_escola,
+--tdt.ds_etapa,
+tdt.ds_ano_serie,
+count(1) qtd
+from dw_censo.tb_dm_turma tdt 
+join dw_sige.tb_dm_escola tde on tde.id_escola_inep::int = tdt.id_escola_inep
+where nr_ano_censo >2021
+and cd_ano_serie = 10
+group by 1,2,3,4,5,6,7,8
+union 
+select 
+2024 nr_ano_censo,
+cd_crede_sefor id_crede_sefor,
+nm_crede_sefor,
+nm_municipio,
+nm_categoria ds_categoria,
+id_escola_inep,
+nm_escola,
+'1ª Série EM' ds_ano_serie,
+count(distinct cd_turma ) qtd
+from dw_sige.tb_cubo_aluno_junho_2024 tcaj 
+where cd_etapa_aluno = 162
+group by 1,2,3,4,5,6,7,8
+order by 1,2,4,5,7
+)
+select
+id_crede_sefor,
+nm_crede_sefor,
+sum(case when nr_ano_censo = 2022 then qtd else 0 end) nr_2022,
+sum(case when nr_ano_censo = 2023 then qtd else 0 end) nr_2023,
+sum(case when nr_ano_censo = 2024 then qtd else 0 end) nr_2024
+from escolas
+group by 1,2
+order by 1
